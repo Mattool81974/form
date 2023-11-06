@@ -3,6 +3,27 @@ from mlib.mlib import *
 def distance2D(x1, y1, x2, y2):
     return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
+def distanceBetweenLineAndPos(l1: tuple, l2: tuple, pos: tuple) -> float:
+        """Return the distance between the line and the pos
+
+        Args:
+            pos (tuple): pos to test
+
+        Returns:
+            float: distance between the line and the pos
+        """
+        if l1[0] > l2[0]: l1, l2 = l2, l1
+        #Line equation formula : ax + by + c = 0 or coef * x + 1 * y + k = 0
+        coef = (l2[0] - l1[0]) / (l2[1] - l1[1])
+        dist = ((pos[0] - l1[0]) * coef + (pos[1] - l1[1]))/math.sqrt(coef ** 2 + 1)
+        x = l1[0] + (dist)/math.sqrt(coef ** 2 + 1) * coef
+        y = l1[1] + (dist)/math.sqrt(coef ** 2 + 1)
+        if x < l1[0]:
+            return distance2D(pos[0], pos[1], l1[0], l1[1])
+        elif x > l2[0]:
+            return distance2D(pos[0], pos[1], l2[0], l2[1])
+        return distance2D(x, y, pos[0], pos[1])
+
 class BaseObject:
     """Base object of all object into form
     """
@@ -11,7 +32,7 @@ class BaseObject:
         self.baseColor = (0, 0, 0)
         self.color = (0, 0, 0)
         self.selectedColor = (0, 102, 102)
-        self.selectedRadius = 0
+        self.selectedRadius = 2
 
     def getBaseColor(self) -> tuple:
         """Return the base color of the object
@@ -38,10 +59,10 @@ class BaseObject:
         return self.selectedColor
     
     def getSelectedRadius(self) -> int:
-        """Return the radius where the obejct can be selected
+        """Return the radius where the object can be selected
 
         Returns:
-            int: radius where the obejct can be selected
+            int: radius where the object can be selected
         """
         return self.selectedRadius
     
@@ -103,6 +124,14 @@ class Point(BaseObject):
             int: radius of the point
         """
         return self.radius
+    
+    def getSelectedRadius(self) -> int:
+        """Return the radius where the object can be selected
+
+        Returns:
+            int: radius where the object can be selected
+        """
+        return self.getRadius() + super().getSelectedRadius()
 
     def getX(self) -> float:
         """Return the x pos of the point
@@ -140,6 +169,7 @@ class Line(BaseObject):
             point1 (Point): first point of the line
             point2 (Point): second point of the line
         """
+        super().__init__()
         self.color = (0, 0, 0)
         self.point1 = point1
         self.point2 = point2
@@ -152,6 +182,17 @@ class Line(BaseObject):
             tuple: color of the line
         """
         return self.color
+    
+    def getDistanceFromPoint(self, point: Point) -> float:
+        """Return the distance between the line and the point
+
+        Args:
+            point (Point): point to test
+
+        Returns:
+            float: distance between the line and the point
+        """
+        return distanceBetweenLineAndPos(self.getPoint1().getPos(), self.getPoint2().getPos(), (point.getX(), point.getY()))
 
     def getPoint1(self) -> Point:
         """Return the first point of the line
@@ -286,7 +327,7 @@ class WindowForm(MWidget):
         return self.areaPos
 
     def getAreaPosWithPoint(self, point: Point) -> tuple:
-        """Return the pos in the area of a point "point
+        """Return the pos in the area of a point "point"
 
         Args:
             pos (tuple): point to test
@@ -294,7 +335,18 @@ class WindowForm(MWidget):
         Returns:
             tuple: pos of "point" in the area
         """
-        return (((point.getX()) * self.getAreaZoom()) + (self.getAreaSize()[0] / 2), self.getAreaSize()[1] / 2 - (point.getY() * self.getAreaZoom()))
+        return self.getAreaPosWithPos((point.getX(), point.getY()))
+    
+    def getAreaPosWithPos(self, pos: tuple) -> tuple:
+        """Return the pos in the area of a pos "pos"
+
+        Args:
+            pos (tuple): pos to test
+
+        Returns:
+            tuple: pos of "pos" in the area
+        """
+        return (((pos[0]) * self.getAreaZoom()) + (self.getAreaSize()[0] / 2), self.getAreaSize()[1] / 2 - (pos[1] * self.getAreaZoom()))
 
     def getAreaSize(self) -> tuple:
         """Return the size of the area
@@ -421,13 +473,20 @@ class WindowForm(MWidget):
                 elif self._tools.getActualChoice() == "Select":
                     shorterDistance = self.getAreaSize()[0] * 10
                     shorterPoint = 0
+                    for l in self.calcLine[self.getCurrentCalc()]:
+                        normalizedPoint1 = self.getAreaPosWithPoint(l.getPoint1())
+                        normalizedPoint2 = self.getAreaPosWithPoint(l.getPoint2())
+                        distance = distanceBetweenLineAndPos(normalizedPoint1, normalizedPoint2, relativePos)
+                        if distance <= shorterDistance:
+                            shorterDistance = distance
+                            shorterPoint = l
                     for p in self.calcPoint[self.getCurrentCalc()]:
                         areaPos = self.getAreaPosWithPoint(p)
                         distance = distance2D(areaPos[0], areaPos[1], relativePos[0], relativePos[1])
-                        if distance < shorterDistance:
+                        if distance <= shorterDistance:
                             shorterDistance = distance
                             shorterPoint = p
-                    if shorterPoint != 0 and shorterDistance < shorterPoint.getRadius() + shorterPoint.getSelectedRadius():
+                    if shorterPoint != 0 and shorterDistance < shorterPoint.getSelectedRadius():
                         self.setSelectedObject(shorterPoint)
 
     def _lastUpdate(self, deltaTime: float) -> None:

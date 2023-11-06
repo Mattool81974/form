@@ -5,7 +5,7 @@ TAILLE = [700, 700]
 fenetre = pygame.display.set_mode(TAILLE)
 mapp = MApp(fenetre, "Test", TAILLE[0], TAILLE[1], printFps=True)
 wf = WindowForm(0, 0, mapp)
-
+"""
 nbPoints = 5
 
 points = []
@@ -28,6 +28,14 @@ for i in range(nbPoints - 1):
     wf.addLine(l2, 0)
 
 l = Line(points[-1], points2[-1])
+wf.addLine(l, 0)
+"""
+
+p1, p2 = Point(0, 0), Point(-50, -50)
+l = Line(p1, p2)
+
+wf.addPoint(p1, 0)
+wf.addPoint(p2, 0)
 wf.addLine(l, 0)
 
 while True:
