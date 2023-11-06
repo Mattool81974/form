@@ -209,7 +209,16 @@ class WindowForm(MWidget):
         self.areaSize = (500, 500)
         self.areaZoom = 1
 
+        self.pixelForOneCentimeterWithBaseZoom = 100
+
         self.selectedObjects = []
+
+        self._scaleUnitText = MText("1 cm", self.getAreaPos()[0] + self.getAreaSize()[0] - 95, self.getAreaPos()[1] + self.getAreaSize()[1] - 45, 75, 25, self)
+
+        self._scaleUnitText.setBackgroundColor((255, 255, 255, 0))
+        self._scaleUnitText.setFontSize(22)
+        self._scaleUnitText.setTextHorizontalAlignment(1)
+        self._scaleUnitText.setTextVerticalAlignment(1)
 
         self._selectButton = MButton("Select", 0, 150, 150, 30, self)
         self._newPointButton = MButton("New point", 0, self._selectButton.getY() + self._selectButton.getHeight(), 150, 30, self)
@@ -235,7 +244,7 @@ class WindowForm(MWidget):
 
         self._zoomSlider.setValue(100)
 
-        self._zoomText.setAntiAnaliasing(True)
+        self._zoomText.setBackgroundColor((255, 255, 255, 0))
         self._zoomText.setFontSize(22)
         self._zoomText.setTextHorizontalAlignment(1)
         self._zoomText.setTextVerticalAlignment(1)
@@ -311,6 +320,14 @@ class WindowForm(MWidget):
         """
         return self.currentCalc
     
+    def getPixelForOneCentimeterWithBaseZoom(self) -> float:
+        """Return the number of pixel for one centimeter with the base zoom
+
+        Returns:
+            float: number of pixel for one centimeter with the base zoom
+        """
+        return self.pixelForOneCentimeterWithBaseZoom
+    
     def getPointPosWithAreaPos(self, pos: tuple) -> tuple:
         """Return the pos of a point with the area pos
 
@@ -321,6 +338,16 @@ class WindowForm(MWidget):
             tuple: pos of "pos" in point
         """
         return ((pos[0] - (self.getAreaSize()[0] / 2)) / self.getAreaZoom(), -((pos[1] - (self.getAreaSize()[1] / 2)) / self.getAreaZoom()))
+    
+    def getScaleLineUnit(self) -> str:
+        """Return the unit used for scale line unit
+
+        Returns:
+            str: unit used for scale line unit
+        """
+        if self.getAreaZoom() <= 0.3: return "10 cm"
+        elif self.getAreaZoom() >= 2.5: return "1 mm"
+        return "1 cm"
     
     def getVisibleAreaRect(self) -> tuple:
         """Return the rect shown in the area
@@ -442,6 +469,15 @@ class WindowForm(MWidget):
                 pos = self.getAreaPosWithPoint(i)
                 pygame.draw.circle(calcArea, i.getBorderColor(), pos, i.getRadius() + i.getBorderWidth())
                 pygame.draw.circle(calcArea, i.getColor(), pos, i.getRadius())
+
+        #Draw scale line
+        self._scaleUnitText.setText(self.getScaleLineUnit())
+        divide = 1
+        if self.getAreaZoom() <= 0.3: divide = 10
+        elif self.getAreaZoom() >= 2.5: divide = 0.1
+        divide *= self.getAreaZoom()
+        lineSize = self.getPixelForOneCentimeterWithBaseZoom() * divide
+        pygame.draw.line(calcArea, (0, 0, 0), (calcArea.get_width() - lineSize - 20, calcArea.get_height() - 20), (calcArea.get_width() - 20, calcArea.get_height() - 20), 2)
 
         surface.blit(calcArea, (self.getAreaPos()[0], self.getAreaPos()[1], calcArea.get_width(), calcArea.get_height()))
 
