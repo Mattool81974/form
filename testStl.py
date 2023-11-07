@@ -55,9 +55,9 @@ if nbFacette == 6:
 
     triangles.append(struct.pack("=H", 0))
 
-    triangles.append(struct.pack("=f", -1))
-    triangles.append(struct.pack("=f", -1))
-    triangles.append(struct.pack("=f", -1))
+    triangles.append(struct.pack("=f", 0))
+    triangles.append(struct.pack("=f", 1))
+    triangles.append(struct.pack("=f", 1))
 
     triangles.append(struct.pack("=f", 300))
     triangles.append(struct.pack("=f", 100))
@@ -73,7 +73,7 @@ if nbFacette == 6:
 
     triangles.append(struct.pack("=H", 0))
 
-fichier = open("../test2.stl", "wb")
+fichier = open("./test2.stl", "wb")
 
 fichier.write(contenuFichier)
 fichier.write(nbTriangle)
