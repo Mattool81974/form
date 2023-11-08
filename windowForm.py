@@ -1,5 +1,7 @@
 from anytree import *
 from mlib.mlib import *
+import numpy
+import scipy
 import struct
 
 def distance2D(x1, y1, x2, y2):
@@ -133,11 +135,12 @@ class BaseObject:
     """Base object of all object into form
     """
 
-    def __init__(self) -> None:
+    def __init__(self, windowForm) -> None:
         self.baseColor = (0, 0, 0)
         self.color = (0, 0, 0)
         self.selectedColor = (0, 102, 102)
         self.selectedRadius = 2
+        self.windowForm = windowForm
 
     def getBaseColor(self) -> tuple:
         """Return the base color of the object
@@ -184,20 +187,30 @@ class Point(BaseObject):
     """Base object to define a point, inherits from BaseObject
     """
 
-    def __init__(self, x: float, y: float) -> None:
+    def __init__(self, x: float, y: float, wf, z: float = 0) -> None:
         """Construct an Point object
 
         Args:
             x (float): x pos of the point
             y (float): y pos of the point
         """
-        super().__init__()
+        super().__init__(wf)
         self.borderColor = (255, 0, 0)
         self.borderWidth = 0
         self.connections = []
         self.radius = 2
         self.x = x
         self.y = y
+        self.z = z
+
+    def copy(self):
+        """Return a copy of this point
+
+        Returns:
+            Point: copy of this point
+        """
+        p = Point(self.getX(), self.getY(), self.windowForm, self.getZ())
+        return p
 
     def getBorderColor(self) -> tuple:
         """Return the color of the border
@@ -263,6 +276,14 @@ class Point(BaseObject):
         """
         return self.y
     
+    def getZ(self) -> float:
+        """Return the z pos of the point
+
+        Returns:
+            float: z pos of the point
+        """
+        return self.z
+    
     def setBorderWidth(self, borderWidth: int) -> None:
         """Change the widget of the border
 
@@ -272,6 +293,14 @@ class Point(BaseObject):
         if self.getBorderWidth() != borderWidth:
             self.borderWidth = borderWidth
 
+    def setZ(self, z: float) -> None:
+        """Change the z pos
+
+        Args:
+            z (float): new z pos
+        """
+        if self.getZ() != z: self.z = z
+
     def __str__(self) -> str:
         return str(self.getPos())
 
@@ -279,14 +308,14 @@ class Line(BaseObject):
     """Base geometrical line, inherits from BaseObject
     """
 
-    def __init__(self, point1: Point, point2: Point) -> None:
+    def __init__(self, point1: Point, point2: Point, wf) -> None:
         """Construct an Line object
 
         Args:
             point1 (Point): first point of the line
             point2 (Point): second point of the line
         """
-        super().__init__()
+        super().__init__(wf)
         self.color = (0, 0, 0)
         self.point1 = point1
         self.point2 = point2
@@ -354,7 +383,7 @@ class Facet:
     """Base geometrical facet for stl convertion
     """
 
-    def __init__(self, p1: Point, p2: Point, p3: Point, offset: tuple = (0, 0)) -> None:
+    def __init__(self, p1: Point, p2: Point, p3: Point, offset: tuple = (0, 0, 0), vector: tuple = (0, 0, 1)) -> None:
         """Create a facet object
 
         Args:
@@ -366,32 +395,32 @@ class Facet:
         self.point1 = p1
         self.point2 = p2
         self.point3 = p3
+        self.vector = vector
 
-    def forStl(self) -> str:
+    def forStl(self) -> list:
         """Return how the facet would appear in stl file in a list
 
         Returns:
             str: how the facet would appear in stl file in a list
         """
         vertex = []
-        vertex.append(struct.pack("=f", -1))
-        vertex.append(struct.pack("=f", -1))
-        vertex.append(struct.pack("=f", -1))
+        vertex.append(struct.pack("=f", 0)) #X
+        vertex.append(struct.pack("=f", 0)) #Y
+        vertex.append(struct.pack("=f", 1)) #Z
 
         multiplicator = 0.1
 
-        print(self.getOffset()[0] + self.getPoint1().getX())
         vertex.append(struct.pack("=f", (self.getOffset()[0] + self.getPoint1().getX()) * multiplicator))
         vertex.append(struct.pack("=f", (self.getOffset()[1] + self.getPoint1().getY()) * multiplicator))
-        vertex.append(struct.pack("=f", 0))
+        vertex.append(struct.pack("=f", (self.getOffset()[2] + self.getPoint1().getZ()) * multiplicator))
 
         vertex.append(struct.pack("=f", (self.getOffset()[0] + self.getPoint2().getX()) * multiplicator))
         vertex.append(struct.pack("=f", (self.getOffset()[1] + self.getPoint2().getY()) * multiplicator))
-        vertex.append(struct.pack("=f", 0))
+        vertex.append(struct.pack("=f", (self.getOffset()[2] + self.getPoint2().getZ()) * multiplicator))
 
-        vertex.append(struct.pack("=f", (self.getOffset()[0] + self.getPoint2().getX()) * multiplicator))
-        vertex.append(struct.pack("=f", (self.getOffset()[1] + self.getPoint2().getY()) * multiplicator))
-        vertex.append(struct.pack("=f", 0))
+        vertex.append(struct.pack("=f", (self.getOffset()[0] + self.getPoint3().getX()) * multiplicator))
+        vertex.append(struct.pack("=f", (self.getOffset()[1] + self.getPoint3().getY()) * multiplicator))
+        vertex.append(struct.pack("=f", (self.getOffset()[2] + self.getPoint3().getZ()) * multiplicator))
 
         vertex.append(struct.pack("=H", 0))
 
@@ -433,13 +462,13 @@ class Face(BaseObject):
     """Base geometrical face, inherits from BaseObject
     """
 
-    def __init__(self, points: list) -> None:
+    def __init__(self, points: list, wf) -> None:
         """Create an Face object
 
         Args:
             points (list): list of all the points in the face
         """
-        super().__init__()
+        super().__init__(wf)
         self.points = points
 
         self.arrangePoints()
@@ -554,26 +583,58 @@ class Face(BaseObject):
             y += i.getPos()[1]
         return (x / len(self.getPoint()), y / len(self.getPoint()))
     
+    def tiniestX(self, points = 0) -> Point:
+        """Return the point with the tiniest X
+
+        Returns:
+            Point: point with the tiniest X
+        """
+        if points == 0: points = self.points
+        pX = points[0]
+        for p in points:
+            if p.getX() < pX.getX():
+                pX = p
+        return pX
+    
+    def tiniestY(self, points = 0) -> Point:
+        """Return the point with the tiniest Y
+
+        Returns:
+            Point: point with the tiniest Y
+        """
+        if points == 0: points = self.points
+        pY = points[0]
+        for p in points:
+            if p.getY() < pY.getY():
+                pY = p
+        return pY
+    
     def triangulate(self) -> list:
         """Return a list of facet of the face triangulated
 
         Returns:
             list: list of facet of the face triangulated
         """
+        calcHeight = 100
         facets = []
+        facetsBorder = []
+        facetsHigh = []
         length = len(self.points) - 2
-        offset = (-self.furtherPointOnX().getX(), -self.furtherPointOnY().getY())
+        offset = (-self.windowForm.tiniestX().getX(), -self.windowForm.tiniestY().getY(), 0)
+        offsetHigh = (-self.windowForm.tiniestX().getX(), -self.windowForm.tiniestY().getY(), calcHeight)
         points = list.copy(self.points)
+        pointsForBorder = list.copy(self.points)
 
-        pointToTest = self.furtherPoint()
-
+        """
         for i in range(length):
+            pointToTest = self.furtherPoint(points)
+            pointToTest.setColor((0, 255, 0))
             point1 = 0
             point2 = 0
             for h in pointToTest.getConnectedWith(): #Selected good points
                 if points.count(h) > 0:
                     if point1 == 0: point1 = h
-                    else: point2 = h
+                    elif point2 == 0: point2 = h
             
             if point1 != 0 and point2 != 0:
                 point1.getConnectedWith().append(point2)
@@ -582,11 +643,75 @@ class Face(BaseObject):
                 point1.getConnectedWith().remove(pointToTest)
                 point2.getConnectedWith().remove(pointToTest)
 
-                pointToTest = point2
-
                 facet = Facet(pointToTest, point1, point2, offset)
                 facets.append(facet)
-                points.remove(pointToTest)
+
+                facet = Facet(pointToTest, point1, point2, offsetHigh)
+                facetsHigh.append(facet)
+
+                points.remove(pointToTest)"""
+        
+        pos = []
+        for p in points: pos.append(p.getPos())
+        posNp = numpy.array(pos)
+        ps = scipy.spatial.Delaunay(posNp)
+
+        for p in ps.simplices:
+            point1 = Point(posNp[p[0]][0], posNp[p[0]][1], self.windowForm)
+            point2 = Point(posNp[p[1]][0], posNp[p[1]][1], self.windowForm)
+            point3 = Point(posNp[p[2]][0], posNp[p[2]][1], self.windowForm)
+            point4 = Point(posNp[p[0]][0], posNp[p[0]][1], self.windowForm, calcHeight)
+            point5 = Point(posNp[p[1]][0], posNp[p[1]][1], self.windowForm, calcHeight)
+            point6 = Point(posNp[p[2]][0], posNp[p[2]][1], self.windowForm, calcHeight)
+
+            if point1.getConnectedWith().count(point2) == 0: point1.getConnectedWith().append(point2)
+            if point1.getConnectedWith().count(point3) == 0: point1.getConnectedWith().append(point3)
+
+            if point2.getConnectedWith().count(point1) == 0: point2.getConnectedWith().append(point1)
+            if point2.getConnectedWith().count(point3) == 0: point2.getConnectedWith().append(point3)
+
+            if point3.getConnectedWith().count(point1) == 0: point3.getConnectedWith().append(point1)
+            if point3.getConnectedWith().count(point2) == 0: point3.getConnectedWith().append(point2)
+
+            facet1 = Facet(point1, point2, point3, offset)
+
+            facet2 = Facet(point4, point5, point6, offsetHigh)
+
+            facets.append(facet1)
+            facetsHigh.append(facet2)
+
+        for i in range(length + 1):
+            point1 = pointsForBorder[i]
+            point2 = pointsForBorder[i + 1]
+            point3 = pointsForBorder[i + 1].copy()
+            point4 = pointsForBorder[i].copy()
+
+            point3.setZ(calcHeight)
+            point4.setZ(calcHeight)
+
+            facet1 = Facet(point1, point2, point4, offset)
+            facet2 = Facet(point3, point2, point4, offset)
+
+            facetsBorder.append(facet1)
+            facetsBorder.append(facet2)
+
+        point1 = pointsForBorder[-1]
+        point2 = pointsForBorder[0]
+        point3 = pointsForBorder[0].copy()
+        point4 = pointsForBorder[-1].copy()
+
+        point3.setZ(calcHeight)
+        point4.setZ(calcHeight)
+
+        facet1 = Facet(point1, point2, point4, offset)
+        facet2 = Facet(point3, point2, point4, offset)
+
+        facetsBorder.append(facet1)
+        facetsBorder.append(facet2)
+
+        for f in facetsBorder: facets.append(f)
+
+        for f in facetsHigh: facets.append(f)
 
         return facets
 
@@ -714,7 +839,7 @@ class WindowForm(MWidget):
             actualLevel += 1
 
         for f in faces:
-            face = Face(f)
+            face = Face(f, self)
             self.addFace(face, 0)
 
     def getAreaOffset(self) -> tuple:
@@ -860,8 +985,6 @@ class WindowForm(MWidget):
         for c in comment: commentToList.append(ord(c))
         commentBinary = bytearray(commentToList)
 
-        print(nbFacet)
-
         fichier = open(acces, "wb")
 
         fichier.write(commentBinary)
@@ -904,6 +1027,34 @@ class WindowForm(MWidget):
             self.selectedObjects.append(object)
             object.setColor(object.getSelectedColor())
             self.setShouldModify(True)
+
+    def tiniestX(self, calc = -1) -> Point:
+        """Return the point with the tiniest X
+
+        Returns:
+            Point: point with the tiniest X
+        """
+        if calc == -1: calc = self.getCurrentCalc()
+        points = self.calcPoint[calc]
+        pX = points[0]
+        for p in points:
+            if p.getX() < pX.getX():
+                pX = p
+        return pX
+    
+    def tiniestY(self, calc = -1) -> Point:
+        """Return the point with the tiniest Y
+
+        Returns:
+            Point: point with the tiniest Y
+        """
+        if calc == -1: calc = self.getCurrentCalc()
+        points = self.calcPoint[calc]
+        pY = points[0]
+        for p in points:
+            if p.getY() < pY.getY():
+                pY = p
+        return pY
 
     def _isGettingMouseDown(self, button: int, relativePos: tuple):
         if button == 1:
